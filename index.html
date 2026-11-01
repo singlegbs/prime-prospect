@@ -1046,6 +1046,7 @@ const mountTechText = ({
         const rect = container.getBoundingClientRect();
         if (Math.hypot(e.clientX - rect.left - press.x, e.clientY - rect.top - press.y) < 6) kick(press.index);
       }
+      if (e.pointerType !== 'mouse' || e.type === 'pointercancel') pointer.inside = false;
       press.index = -1;
       wake();
     };
