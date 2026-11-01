@@ -1,6 +1,5 @@
 name: Polish icons fonts and spacing
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 permissions:
   contents: write
 jobs:
@@ -15,7 +14,6 @@ jobs:
           import urllib.request, xml.etree.ElementTree as ET, re
           p=Path('index.html'); s=p.read_text(encoding='utf-8')
           assert s.count('id="pp-contact-icons"')==1, 'Contact icon update must be committed first'
-          # Self-host the Latin subsets, avoiding render-blocking external font stylesheets.
           fonts={400:'pxiEyp8kv8JHgFVrJJfecg.woff2',600:'pxiByp8kv8JHgFVrLEj6Z1xlFQ.woff2',700:'pxiByp8kv8JHgFVrLCz7Z1xlFQ.woff2'}
           folder=Path('fonts'); folder.mkdir(exist_ok=True)
           for weight,name in fonts.items():
@@ -23,17 +21,14 @@ jobs:
               assert data[:4]==b'wOF2', 'Invalid font file'
               (folder/f'poppins-{weight}.woff2').write_bytes(data)
               print('Poppins',weight,len(data),'bytes')
-          license_data=urllib.request.urlopen('https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/OFL.txt',timeout=30).read()
-          (folder/'OFL-Poppins.txt').write_bytes(license_data)
-          # Remove only the external Google Fonts stylesheet and its preconnects.
+          (folder/'OFL-Poppins.txt').write_bytes(urllib.request.urlopen('https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/OFL.txt',timeout=30).read())
           s,n=re.subn(r'<link rel="preload" as="style" href="https://fonts\.googleapis\.com/[^>]+><noscript><link href="https://fonts\.googleapis\.com/[^>]+></noscript>','',s,count=1)
           assert n==1,'Original font tags not found'
           s=re.sub(r'<link rel="preconnect" href="https://fonts\.googleapis\.com"\s*/?>','',s)
           s=re.sub(r'<link rel="preconnect" href="https://fonts\.gstatic\.com"[^>]*>','',s)
           sans='-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,sans-serif'
-          s=s.replace('Inter,sans-serif',sans).replace('Archivo,sans-serif','Poppins,'+sans).replace("fontFamily:'Archivo'","fontFamily:'Poppins'")
+          s=s.replace('Inter,sans-serif',sans).replace("Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",sans).replace('Archivo,sans-serif','Poppins,'+sans).replace("fontFamily:'Archivo'","fontFamily:'Poppins'")
           s=s.replace("'IBM Plex Mono',monospace",'ui-monospace,SFMono-Regular,Menlo,monospace')
-          # Replace X and WhatsApp with recognizable Simple Icons paths.
           start=s.index('<section class="contact '); end=s.index('</section>',start)+10; contact=s[start:end]
           for slug,label in [('x','Follow Prime Prospect on X'),('whatsapp','Contact Bright on WhatsApp')]:
               raw=urllib.request.urlopen('https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/'+slug+'.svg',timeout=30).read()
@@ -46,20 +41,20 @@ jobs:
           def icon(path):
               return '<svg class="pp-concept-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>'
           glyphs={
-            'Web design &amp; CRO agencies':'<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 8h18M8 22h8M12 19v3"/>',
-            'Paid ad agencies':'<path d="M3 10v4h4l9 4V6L7 10H3zM7 14l2 6h3M19 9c1.4 1.5 1.4 4.5 0 6"/>',
-            'B2B SaaS consultants':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 12h4M7 16h8"/>',
-            'You send your ICP.':'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6-6"/>',
-            'I research each account.':'<circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/>',
-            'Every contact is verified.':'<path d="M12 3 4 6v6c0 4.5 4 7.5 8 9 4-1.5 8-4.5 8-9V6z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/>',
-            'You receive a Google Sheet.':'<path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8M11 10v8"/>'}
+          'Web design &amp; CRO agencies':'<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 8h18M8 22h8M12 19v3"/>',
+          'Paid ad agencies':'<path d="M3 10v4h4l9 4V6L7 10H3zM7 14l2 6h3M19 9c1.4 1.5 1.4 4.5 0 6"/>',
+          'B2B SaaS consultants':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 12h4M7 16h8"/>',
+          'You send your ICP.':'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6-6"/>',
+          'I research each account.':'<circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/>',
+          'Every contact is verified.':'<path d="M12 3 4 6v6c0 4.5 4 7.5 8 9 4-1.5 8-4.5 8-9V6z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/>',
+          'You receive a Google Sheet.':'<path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8M11 10v8"/>'}
           for label,path in glyphs.items():
-              old=('class="row-title">' if 'agencies' in label or 'consultants' in label else '<h3>')+label+'</h3>'
-              new=('class="row-title">' if 'agencies' in label or 'consultants' in label else '<h3>')+icon(path)+label+'</h3>'
+              prefix='class="row-title">' if 'agencies' in label or 'consultants' in label else '<h3>'
+              old=prefix+label+'</h3>'; new=prefix+icon(path)+label+'</h3>'
               assert s.count(old)==1, label
               s=s.replace(old,new,1)
           faces=''.join('@font-face{font-family:Poppins;font-style:normal;font-weight:'+str(w)+';font-display:swap;src:url("fonts/poppins-'+str(w)+'.woff2") format("woff2");}' for w in fonts)
-          css='''<link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin><style id="pp-premium-polish">'''+faces+'''
+          css='''<link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin><style id="pp-icons-type-polish">'''+faces+'''
           .pp-concept-icon{width:22px;height:22px;display:inline-block;vertical-align:-.12em;margin-inline-end:.45em;color:var(--accent);transition:transform .22s ease,filter .22s ease}
           .ruled-list li:hover .pp-concept-icon,.ruled-list li:focus-within .pp-concept-icon,.process-list li:hover .pp-concept-icon,.process-list li:focus-within .pp-concept-icon,#pp-bento .pp-bento-card:hover svg{transform:scale(1.06);filter:drop-shadow(0 0 4px rgba(92,164,52,.45))}
           #pp-bento .pp-bento-card svg{transition:transform .22s ease,filter .22s ease}
@@ -67,7 +62,7 @@ jobs:
           @media(max-width:767px){.hero-inner.wrap{gap:24px}.section{padding-block:72px}.ruled-list h3,.process-list h3{line-height:1.25}.pp-concept-icon{width:20px;height:20px}.contact .actions{gap:16px;flex-wrap:wrap}#pp-ball-slot{min-width:0;max-width:min(320px,calc(100vw - 112px))}}
           @media(prefers-reduced-motion:reduce){.pp-concept-icon,#pp-bento .pp-bento-card svg{transition:none!important;transform:none!important;filter:none!important}}
           </style>'''
-          assert s.count('</head>')==1 and 'pp-premium-polish' not in s
+          assert s.count('</head>')==1 and 'pp-icons-type-polish' not in s
           s=s.replace('</head>',css+'</head>',1)
           p.write_text(s,encoding='utf-8')
           print('Added recognizable concept and official brand icons, self-hosted Poppins and mobile spacing refinements.')
