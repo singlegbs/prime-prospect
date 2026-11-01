@@ -1,0 +1,35 @@
+name: Update device appearance
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Follow device appearance
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = "choice='dark',restoredFrom='system'"
+          assert s.count(old) == 1
+          s = s.replace(old, "choice=null,restoredFrom='system'", 1)
+          start = s.index('var saved=cookieTheme();')
+          end = s.index('function persist(){', start)
+          s = s[:start] + 'var saved=null;' + s[end:]
+          old = 'var change=function(){if(!valid(choice))apply()}'
+          assert s.count(old) == 1
+          s = s.replace(old, 'var change=function(){choice=null;apply()}', 1)
+          css = '''<style id="device-appearance">html[data-theme="light"]{--accent:#286b1b;--on-accent:#fff}html[data-theme="light"] .light-panel{--accent:#79c043;--on-accent:#131417}html[data-theme="light"] .contact{--accent:#286b1b;--on-accent:#fff}@media (prefers-color-scheme:light){html:not([data-theme]){--paper:#131417;--ink:#ECE8E1;--surface:#F4F2EE;--muted:#595D65;--line:rgba(19,20,23,.15);--accent:#286b1b;--on-accent:#fff;color-scheme:light}html:not([data-theme]) .light-panel{background:#131417;color:#ECE8E1;--accent:#79c043;--on-accent:#131417}html:not([data-theme]) .light-panel .label{color:#B9BBC1}html:not([data-theme]) .contact{background:rgba(121,192,67,.94);color:#131417}}</style>'''
+          assert s.count('</head>') == 1
+          s = s.replace('</head>', css + '</head>', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Follow device light and dark appearance'
+          git push
