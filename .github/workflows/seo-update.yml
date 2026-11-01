@@ -1,76 +1,50 @@
-name: Polish icons fonts and spacing
+name: Restore contact links
 on: workflow_dispatch
 permissions:
   contents: write
 jobs:
-  update:
+  repair:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update the website
+        with:
+          fetch-depth: 0
+      - name: Restore and validate contact links
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import urllib.request, xml.etree.ElementTree as ET, re
-          p=Path('index.html'); s=p.read_text(encoding='utf-8')
-          assert s.count('id="pp-contact-icons"')==1, 'Contact icon update must be committed first'
-          fonts={400:'pxiEyp8kv8JHgFVrJJfecg.woff2',600:'pxiByp8kv8JHgFVrLEj6Z1xlFQ.woff2',700:'pxiByp8kv8JHgFVrLCz7Z1xlFQ.woff2'}
-          folder=Path('fonts'); folder.mkdir(exist_ok=True)
-          for weight,name in fonts.items():
-              data=urllib.request.urlopen('https://fonts.gstatic.com/s/poppins/v24/'+name,timeout=30).read()
-              assert data[:4]==b'wOF2', 'Invalid font file'
-              (folder/f'poppins-{weight}.woff2').write_bytes(data)
-              print('Poppins',weight,len(data),'bytes')
-          (folder/'OFL-Poppins.txt').write_bytes(urllib.request.urlopen('https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/OFL.txt',timeout=30).read())
-          s,n=re.subn(r'<link rel="preload" as="style" href="https://fonts\.googleapis\.com/[^>]+><noscript><link href="https://fonts\.googleapis\.com/[^>]+></noscript>','',s,count=1)
-          assert n==1,'Original font tags not found'
-          s=re.sub(r'<link rel="preconnect" href="https://fonts\.googleapis\.com"\s*/?>','',s)
-          s=re.sub(r'<link rel="preconnect" href="https://fonts\.gstatic\.com"[^>]*>','',s)
-          sans='-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,sans-serif'
-          s=s.replace('Inter,sans-serif',sans).replace("Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",sans).replace('Archivo,sans-serif','Poppins,'+sans).replace("fontFamily:'Archivo'","fontFamily:'Poppins'")
-          s=s.replace("'IBM Plex Mono',monospace",'ui-monospace,SFMono-Regular,Menlo,monospace')
-          start=s.index('<section class="contact '); end=s.index('</section>',start)+10; contact=s[start:end]
+          import subprocess, re, urllib.request, xml.etree.ElementTree as ET
+          p=Path('index.html')
+          current=p.read_text(encoding='utf-8')
+          old=subprocess.check_output(['git','show','2e126a4e253679cd8ad8d0f2ea03b63ecc4fe739^:index.html']).decode('utf-8')
+          pat=r'<section class="contact [^\"]*"[^>]*>.*?</section>'
+          prior=re.findall(pat,old,re.S); now=re.findall(pat,current,re.S)
+          assert len(prior)==len(now)==1, 'Expected one contact section in each revision'
+          contact=prior[0]
           for slug,label in [('x','Follow Prime Prospect on X'),('whatsapp','Contact Bright on WhatsApp')]:
               raw=urllib.request.urlopen('https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/'+slug+'.svg',timeout=30).read()
-              root=ET.fromstring(raw); path=next(x.attrib['d'] for x in root.iter() if x.tag.endswith('path'))
+              root=ET.fromstring(raw)
+              path=next(el.attrib['d'] for el in root.iter() if el.tag.endswith('path'))
               icon='<svg class="pp-contact-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="currentColor" d="'+path+'"/></svg>'
-              pattern=r'<svg class="pp-contact-icon"[^>]*>.*?</svg>(?='+re.escape(label)+r'</a>)'
-              contact,n=re.subn(pattern,lambda m:icon,contact,count=1,flags=re.S)
-              assert n==1,slug+' contact icon not found'
-          s=s[:start]+contact+s[end:]
-          def icon(path):
-              return '<svg class="pp-concept-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>'
-          glyphs={
-          'Web design &amp; CRO agencies':'<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 8h18M8 22h8M12 19v3"/>',
-          'Paid ad agencies':'<path d="M3 10v4h4l9 4V6L7 10H3zM7 14l2 6h3M19 9c1.4 1.5 1.4 4.5 0 6"/>',
-          'B2B SaaS consultants':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 12h4M7 16h8"/>',
-          'You send your ICP.':'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6-6"/>',
-          'I research each account.':'<circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/>',
-          'Every contact is verified.':'<path d="M12 3 4 6v6c0 4.5 4 7.5 8 9 4-1.5 8-4.5 8-9V6z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/>',
-          'You receive a Google Sheet.':'<path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8M11 10v8"/>'}
-          for label,path in glyphs.items():
-              prefix='class="row-title">' if 'agencies' in label or 'consultants' in label else '<h3>'
-              old=prefix+label+'</h3>'; new=prefix+icon(path)+label+'</h3>'
-              assert s.count(old)==1, label
-              s=s.replace(old,new,1)
-          faces=''.join('@font-face{font-family:Poppins;font-style:normal;font-weight:'+str(w)+';font-display:swap;src:url("fonts/poppins-'+str(w)+'.woff2") format("woff2");}' for w in fonts)
-          css='''<link rel="preload" href="fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin><style id="pp-icons-type-polish">'''+faces+'''
-          .pp-concept-icon{width:22px;height:22px;display:inline-block;vertical-align:-.12em;margin-inline-end:.45em;color:var(--accent);transition:transform .22s ease,filter .22s ease}
-          .ruled-list li:hover .pp-concept-icon,.ruled-list li:focus-within .pp-concept-icon,.process-list li:hover .pp-concept-icon,.process-list li:focus-within .pp-concept-icon,#pp-bento .pp-bento-card:hover svg{transform:scale(1.06);filter:drop-shadow(0 0 4px rgba(92,164,52,.45))}
-          #pp-bento .pp-bento-card svg{transition:transform .22s ease,filter .22s ease}
-          .hero-copy{min-width:0}.hero-copy p{overflow-wrap:break-word}.section .wrap{min-width:0}.ruled-list h3,.process-list h3{min-width:0;overflow-wrap:break-word}
-          @media(max-width:767px){.hero-inner.wrap{gap:24px}.section{padding-block:72px}.ruled-list h3,.process-list h3{line-height:1.25}.pp-concept-icon{width:20px;height:20px}.contact .actions{gap:16px;flex-wrap:wrap}#pp-ball-slot{min-width:0;max-width:min(320px,calc(100vw - 112px))}}
-          @media(prefers-reduced-motion:reduce){.pp-concept-icon,#pp-bento .pp-bento-card svg{transition:none!important;transform:none!important;filter:none!important}}
-          </style>'''
-          assert s.count('</head>')==1 and 'pp-icons-type-polish' not in s
-          s=s.replace('</head>',css+'</head>',1)
-          p.write_text(s,encoding='utf-8')
-          print('Added recognizable concept and official brand icons, self-hosted Poppins and mobile spacing refinements.')
+              anchors=list(re.finditer(r'<a\b[^>]*>.*?</a>',contact,re.S))
+              matches=[m for m in anchors if label in m.group()]
+              assert len(matches)==1, 'Expected one matching link: '+label
+              m=matches[0]; anchor=m.group()
+              anchor,n=re.subn(r'<svg\b[^>]*>.*?</svg>',lambda _:icon,anchor,count=1,flags=re.S)
+              assert n==1, 'Expected one icon in '+label
+              contact=contact[:m.start()]+anchor+contact[m.end():]
+          for target in ['mailto:bright@primeprospect.net','https://x.com/Primeprospect__','https://wa.me/233538181600']:
+              assert target in contact, 'Missing contact target '+target
+          assert len(re.findall(r'<a\b',contact))==4, 'Expected four contact links'
+          updated=current.replace(now[0],contact,1)
+          assert updated!=current
+          p.write_text(updated,encoding='utf-8')
+          print('Restored four contact links and replaced brand icons without crossing link boundaries.')
           PY
-      - name: Commit changes
+      - name: Commit repair
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html fonts
-          git commit -m 'Polish icons typography and mobile spacing'
+          git add index.html
+          git commit -m 'Restore contact links'
           git push
