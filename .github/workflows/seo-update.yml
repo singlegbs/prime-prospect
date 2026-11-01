@@ -1,0 +1,88 @@
+name: Update SEO metadata and social image
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update metadata
+        run: |
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+          assert '<title>Prime Prospect</title>' in html
+          assert '"@type":"WebSite"' in html
+          assert html.lower().count('</head>') == 1 and html.lower().count('</body>') == 1
+          head, rest = re.split(r'</head>', html, maxsplit=1, flags=re.I)
+          # Replace only the named metadata and canonical, preserving unrelated head content.
+          wanted = {'description','robots','og:type','og:site_name','og:title','og:description','og:url','og:image','twitter:card','twitter:site'}
+          def clean_meta(match):
+              tag = match.group(0)
+              attr = re.search(r'\b(?:name|property)\s*=\s*["\']([^"\']+)["\']', tag, re.I)
+              return '' if attr and attr.group(1).lower() in wanted else tag
+          head = re.sub(r'<meta\b[^>]*>', clean_meta, head, flags=re.I)
+          def clean_link(match):
+              tag = match.group(0)
+              rel = re.search(r'\brel\s*=\s*["\']([^"\']+)["\']', tag, re.I)
+              return '' if rel and 'canonical' in rel.group(1).lower().split() else tag
+          head = re.sub(r'<link\b[^>]*>', clean_link, head, flags=re.I)
+          tags = '''<meta name="description" content="Hand-researched B2B accounts with decision-makers, verified emails and source links. Get 3 free accounts in 48 hours.">
+          <link rel="canonical" href="https://www.primeprospect.net/">
+          <meta name="robots" content="index, follow, max-image-preview:large">
+          <meta property="og:type" content="website">
+          <meta property="og:site_name" content="Prime Prospect">
+          <meta property="og:title" content="Prime Prospect">
+          <meta property="og:description" content="Hand-researched B2B accounts with verified contacts and source links. 3 free accounts in 48 hours.">
+          <meta property="og:url" content="https://www.primeprospect.net/">
+          <meta property="og:image" content="https://www.primeprospect.net/og-image.png">
+          <meta name="twitter:card" content="summary_large_image">
+          <meta name="twitter:site" content="@Primeprospect__">'''
+          html = head + tags + '</head>' + rest
+          faq = [
+              ('What is B2B account research?', "It's finding companies that fit your ideal customer, plus the right decision-makers and the evidence for the fit, before your team reaches out."),
+              ('How is this different from a bought lead list?', 'Every account is checked against your criteria and backed by source links, instead of being a bulk list of names.'),
+              ('Where do the contacts come from?', 'Public sources only. Every email is verified and none are guessed from patterns.')
+          ]
+          for question, answer in faq:
+              assert question in html, question
+          offers = [('Pilot: 23 researched accounts (includes 3 free sample accounts)', '79'), ('Standard: 50 researched accounts', '150'), ('Scale: 100 researched accounts', '250'), ('Retainer: 200 researched accounts per month', '500')]
+          service = {'@type':'ProfessionalService','name':'Prime Prospect','url':'https://www.primeprospect.net/','description':'Hand-researched B2B accounts with decision-makers, verified emails and source links for sales teams and lead-gen agencies.','email':'bright@primeprospect.net','areaServed':'Worldwide','founder':{'@type':'Person','name':'Bright Amoakoh'},'sameAs':['https://x.com/Primeprospect__'],'makesOffer':[{'@type':'Offer','name':name,'price':price,'priceCurrency':'USD'} for name,price in offers]}
+          service['makesOffer'][-1]['description'] = '200 researched accounts per month for $500 per month.'
+          faq_data = {'@type':'FAQPage','mainEntity':[{'@type':'Question','name':q,'acceptedAnswer':{'@type':'Answer','text':a}} for q,a in faq]}
+          data = {'@context':'https://schema.org','@graph':[service,faq_data]}
+          structured = '<script type="application/ld+json">' + json.dumps(data, ensure_ascii=False, separators=(',',':')).replace('</','<\\/') + '</script>'
+          html = re.sub(r'</body>', lambda m: structured + m.group(0), html, count=1, flags=re.I)
+          p.write_text(html, encoding='utf-8')
+          print('Updated head metadata and structured data')
+          PY
+      - name: Render social sharing image
+        run: |
+          cat >/tmp/prime-og.html <<'HTML'
+          <!doctype html><html><head><meta charset="utf-8"><style>
+          *{box-sizing:border-box}html,body{margin:0;width:1200px;height:630px;overflow:hidden;background:#080a09;color:#f4f4f1;font-family:Arial,Helvetica,sans-serif}.canvas{width:1200px;height:630px;position:relative;padding:68px 78px;background:radial-gradient(ellipse at 83% 49%,#172a0f 0%,#0b100a 28%,#080a09 64%)}.brand{font-size:29px;font-weight:900;letter-spacing:-1px}.bar{position:absolute;top:128px;left:78px;width:1044px;height:1px;background:#353b35}.eyebrow{font-family:monospace;color:#a9f855;font-size:19px;letter-spacing:3px;text-transform:uppercase;margin-top:116px}.headline{font-size:78px;line-height:1.03;letter-spacing:-3px;font-weight:800;margin-top:20px;width:750px}.sample{display:inline-block;border:1px solid #92e743;border-radius:100px;color:#bdff78;padding:17px 24px;font-size:23px;margin-top:35px}.orb{position:absolute;right:95px;top:205px;width:285px;height:285px;border-radius:50%;border:3px solid #a3f342;box-shadow:0 0 14px #86e22c,0 0 50px #4d9e1c,inset 0 0 45px #4b8b1e;background:radial-gradient(circle at 32% 30%,#5ea436 0%,#1c391b 25%,#050d08 71%)}.orb:after{content:'';position:absolute;inset:17px;border-radius:50%;background-image:radial-gradient(#a0f55a 1px,transparent 2px);background-size:12px 12px;opacity:.54}.foot{position:absolute;bottom:50px;left:78px;font-family:monospace;color:#a3aca1;font-size:16px;letter-spacing:2px}
+          </style></head><body><div class="canvas"><div class="brand">PRIME PROSPECT</div><div class="bar"></div><div class="eyebrow">Research with a reason</div><div class="headline">B2B Account<br>Research</div><div class="sample">Free 3-account sample</div><div class="orb"></div><div class="foot">WWW.PRIMEPROSPECT.NET</div></div></body></html>
+          HTML
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 --screenshot="$PWD/og-image.png" file:///tmp/prime-og.html
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+          p=Path('og-image.png'); b=p.read_bytes()
+          assert b[:8] == b'\x89PNG\r\n\x1a\n'
+          dimensions=struct.unpack('>II', b[16:24])
+          assert dimensions == (1200,630), dimensions
+          assert len(b) < 300*1024, len(b)
+          print('OG image:', dimensions, len(b), 'bytes')
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html og-image.png
+          git commit -m 'Add SEO metadata and social sharing image'
+          git push
