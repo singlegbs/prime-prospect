@@ -1,50 +1,30 @@
-name: Restore contact links
+name: Improve contact icon contrast
 on: workflow_dispatch
 permissions:
   contents: write
 jobs:
-  repair:
+  update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore and validate contact links
+      - name: Brighten dark theme icons
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import subprocess, re, urllib.request, xml.etree.ElementTree as ET
           p=Path('index.html')
-          current=p.read_text(encoding='utf-8')
-          old=subprocess.check_output(['git','show','2e126a4e253679cd8ad8d0f2ea03b63ecc4fe739^:index.html']).decode('utf-8')
-          pat=r'<section class="contact [^\"]*"[^>]*>.*?</section>'
-          prior=re.findall(pat,old,re.S); now=re.findall(pat,current,re.S)
-          assert len(prior)==len(now)==1, 'Expected one contact section in each revision'
-          contact=prior[0]
-          for slug,label in [('x','Follow Prime Prospect on X'),('whatsapp','Contact Bright on WhatsApp')]:
-              raw=urllib.request.urlopen('https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/'+slug+'.svg',timeout=30).read()
-              root=ET.fromstring(raw)
-              path=next(el.attrib['d'] for el in root.iter() if el.tag.endswith('path'))
-              icon='<svg class="pp-contact-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="currentColor" d="'+path+'"/></svg>'
-              anchors=list(re.finditer(r'<a\b[^>]*>.*?</a>',contact,re.S))
-              matches=[m for m in anchors if label in m.group()]
-              assert len(matches)==1, 'Expected one matching link: '+label
-              m=matches[0]; anchor=m.group()
-              anchor,n=re.subn(r'<svg\b[^>]*>.*?</svg>',lambda _:icon,anchor,count=1,flags=re.S)
-              assert n==1, 'Expected one icon in '+label
-              contact=contact[:m.start()]+anchor+contact[m.end():]
+          s=p.read_text(encoding='utf-8')
+          assert 'id="pp-contact-icons"' in s
+          assert 'pp-contact-contrast' not in s and s.count('</head>') == 1
+          css='<style id="pp-contact-contrast">html[data-theme="dark"] #contact .pp-contact-icon{color:#b6f970}</style>'
+          s=s.replace('</head>',css+'</head>',1)
           for target in ['mailto:bright@primeprospect.net','https://x.com/Primeprospect__','https://wa.me/233538181600']:
-              assert target in contact, 'Missing contact target '+target
-          assert len(re.findall(r'<a\b',contact))==4, 'Expected four contact links'
-          updated=current.replace(now[0],contact,1)
-          assert updated!=current
-          p.write_text(updated,encoding='utf-8')
-          print('Restored four contact links and replaced brand icons without crossing link boundaries.')
+              assert target in s
+          p.write_text(s,encoding='utf-8')
           PY
-      - name: Commit repair
+      - name: Commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Restore contact links'
+          git commit -m 'Improve contact icon contrast in dark mode'
           git push
