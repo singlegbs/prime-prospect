@@ -1,4 +1,4 @@
-name: Reorder sections and update FAQ
+name: Add approved FAQ answers
 on: workflow_dispatch
 permissions:
   contents: write
@@ -7,38 +7,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reorder sections, update FAQ and animate contact icons
+      - name: Add FAQ items and structured data
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          marks=['<section class="statement">','<section class="section" id="founder" aria-labelledby="founder-title">','<section class="section" id="pricing" aria-labelledby="pricing-title">','<section class="contact inset" id="contact" aria-labelledby="contact-title">']
-          assert all(s.count(x)==1 for x in marks)
-          a,b,c,d=[s.index(x) for x in marks]
-          assert a<b<c<d
-          statement=s[a:b].replace('<section class="statement">','<section class="statement" id="pp-section-9">',1)
-          founder,pricing=s[b:c],s[c:d]
-          s=s[:a]+pricing+founder+statement+s[d:]
-          start=s.index('<section class="section" id="faq">')
-          end=s.index('</section>',start)+len('</section>')
-          faq=s[start:end]
-          pattern=r'<p><strong>(.*?)</strong>\s*(.*?)</p>'
-          def make(m): return '<details class="pp-faq-item"><summary>'+m.group(1)+'<span class="pp-faq-symbol" aria-hidden="true"></span></summary><p>'+m.group(2)+'</p></details>'
-          faq,count=re.subn(pattern,make,faq)
-          assert count==3
-          s=s[:start]+faq+s[end:]
-          assert s.count('pp-contact-icon') >= 3
-          css='''<style id="pp-faq-accordion">#faq .pp-faq-item{border-bottom:1px solid var(--accent)}#faq .pp-faq-item summary{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:52px;padding:14px 0;cursor:pointer;list-style:none;color:var(--paper);font-weight:600}#faq .pp-faq-item summary::-webkit-details-marker{display:none}#faq .pp-faq-item summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}#faq .pp-faq-symbol{position:relative;flex:0 0 22px;width:22px;height:22px;color:var(--accent)}#faq .pp-faq-symbol:before,#faq .pp-faq-symbol:after{content:"";position:absolute;background:currentColor;left:3px;right:3px;top:10px;height:2px}#faq .pp-faq-symbol:after{transform:rotate(90deg);transition:transform .2s ease}#faq details[open] .pp-faq-symbol:after{transform:rotate(0)}#faq .pp-faq-item p{margin:0;padding:0 32px 18px 0;line-height:1.6}#faq details[open] p{animation:pp-faq-in .2s ease both}@keyframes pp-faq-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){#faq .pp-faq-symbol:after{transition:none}#faq details[open] p{animation:none}}</style><style id="pp-contact-pulse">#contact .pp-contact-icon{animation:pp-contact-breathe 3s ease-in-out infinite;transform-origin:center}@keyframes pp-contact-breathe{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 transparent)}50%{transform:scale(1.1);filter:drop-shadow(0 0 5px currentColor)}}@media(prefers-reduced-motion:reduce){#contact .pp-contact-icon{animation:none}}</style>'''
-          assert 'pp-faq-accordion' not in s and 'pp-contact-pulse' not in s and s.count('</head>')==1
-          s=s.replace('</head>',css+'</head>',1)
-          p.write_text(s,encoding='utf-8')
+          import json, re, html
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          pairs = [
+              ("What if the free sample isn't a fit?", "Tell me what missed the mark and I'll re-research the sample around it. The fit is the point of the free sample."),
+              ("How do I pay?", "Through Whop's secure checkout. Card payment, and you get your delivery by email.")
+          ]
+          start = s.index('<section class="section" id="faq">')
+          end = s.index('</section>', start) + len('</section>')
+          section = s[start:end]
+          assert section.count('<details class="pp-faq-item">') == 3
+          assert all(q not in section for q, a in pairs)
+          addition = ''.join('<details class="pp-faq-item"><summary>' + html.escape(q, quote=False) + '<span class="pp-faq-symbol" aria-hidden="true"></span></summary><p>' + html.escape(a, quote=False) + '</p></details>' for q, a in pairs)
+          marker = '</div></div></section>'
+          assert section.endswith(marker)
+          section = section[:-len(marker)] + addition + marker
+          s = s[:start] + section + s[end:]
+          matches = list(re.finditer(r'<script type="application/ld\+json">(.*?)</script>', s, re.S))
+          found = 0
+          for m in reversed(matches):
+              data = json.loads(m.group(1))
+              nodes = data.get('@graph', [data])
+              faqs = [node for node in nodes if node.get('@type') == 'FAQPage']
+              if not faqs:
+                  continue
+              assert len(faqs) == 1 and len(faqs[0]['mainEntity']) == 3
+              for q, a in pairs:
+                  faqs[0]['mainEntity'].append({'@type':'Question','name':q,'acceptedAnswer':{'@type':'Answer','text':a}})
+              new = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+              s = s[:m.start(1)] + new + s[m.end(1):]
+              found += 1
+          assert found == 1
+          p.write_text(s, encoding='utf-8')
           PY
-      - name: Commit
+      - name: Commit FAQ update
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Move founder area, animate contact icons and add FAQ accordion'
+          git commit -m 'Add approved FAQ answers and structured data'
           git push
