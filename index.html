@@ -2843,7 +2843,7 @@ function initCrystalizedBall(container,opts={}){const preset=opts.preset||'auror
         arcData[i * 4 + 3] = arc ? Math.sin((Math.PI * arc.life) / arc.duration) * arc.strength : 0;
       }
 
-      rebuildDust(s.particleCount);
+      rebuildDust(Math.min(s.particleCount, reducedMotion ? 3500 : window.innerWidth <= 767 ? 5000 : 7500));
       const palette = s.palette;
 
       fieldUniforms.uCenter.value = [width / 2, height / 2];
